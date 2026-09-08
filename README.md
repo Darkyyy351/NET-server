@@ -2,6 +2,8 @@
 
 ## Device admission and active verification
 
+Rejected requests are available via `GET /api/v1/devices/requests?status=rejected`. In Security, use **Vratit ke schvaleni** to send `POST /api/v1/devices/:id/admission` with `{ "decision": "pending" }`. This transition is allowed only from rejected, is persisted and logged, and does not approve the device. The normal approval dialog must still be accepted.
+
 New self-registrations require a stable ID and persist as `pending`. Existing records without an admission field remain approved. `GET /api/v1/devices/requests` lists pending requests; `POST /api/v1/devices/:id/admission` accepts `{ "decision": "approved" }` or `rejected`. Repeated registration cannot change that decision. Pending/rejected devices cannot heartbeat, read, queue, claim or acknowledge commands. Manually created devices remain approved.
 
 This release still uses a shared bearer: admission is an operator workflow, not isolation from a malicious holder of that credential. Per-device credentials and separate administrator authorization are required before treating this as a security boundary. A rejected ID stays rejected; changing IDs is not a trusted hardware identity.
