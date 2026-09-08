@@ -104,12 +104,13 @@ exports.getAll = () => {
   return readData().filter(d => !d.admission || d.admission === 'approved').map(publicDevice);
 };
 
-exports.getRequests = () => readData().filter(d => d.admission === 'pending').map(publicDevice);
+exports.getRequests = (admission = 'pending') => readData().filter(d => d.admission === admission).map(publicDevice);
 
 exports.decideAdmission = (id, decision) => {
   const devices = readData();
   const device = findDevice(devices, id);
-  if (!device || device.admission !== 'pending') return null;
+  const from = decision === 'pending' ? 'rejected' : 'pending';
+  if (!['pending', 'approved', 'rejected'].includes(decision) || !device || device.admission !== from) return null;
   device.admission = decision;
   device.updatedAt = new Date().toISOString();
   writeData(devices);

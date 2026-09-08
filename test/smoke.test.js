@@ -131,6 +131,22 @@ async function main() {
     assert.equal((await request(baseUrl, '/api/v1/devices/esp-rejected/heartbeat', { method: 'POST', body: '{}' })).status, 403);
     assert.equal((await request(baseUrl, '/api/v1/devices/esp-rejected/commands', { method: 'POST', body: JSON.stringify({ type: 'identify' }) })).status, 403);
     assert.equal(JSON.parse(fs.readFileSync(dataPath, 'utf8')).find(d => d.id === 'esp-rejected').admission, 'rejected');
+    const rejectedList = await request(baseUrl, '/api/v1/devices/requests?status=rejected');
+    assert.deepEqual((await rejectedList.json()).data.map(d => d.id), ['esp-rejected']);
+    assert.equal((await request(baseUrl, '/api/v1/devices/requests?status=approved')).status, 400);
+    assert.equal((await request(baseUrl, '/api/v1/devices/esp-rejected/admission', { method: 'POST', body: JSON.stringify({ decision: 'approved' }) })).status, 409);
+    const restored = await request(baseUrl, '/api/v1/devices/esp-rejected/admission', { method: 'POST', body: JSON.stringify({ decision: 'pending' }) });
+    assert.equal(restored.status, 200);
+    assert.equal((await restored.json()).data.admission, 'pending');
+    assert.equal(JSON.parse(fs.readFileSync(dataPath, 'utf8')).find(d => d.id === 'esp-rejected').admission, 'pending');
+    assert.equal((await (await request(baseUrl, '/api/v1/devices/requests?status=rejected')).json()).data.length, 0);
+    assert.equal((await (await request(baseUrl, '/api/v1/devices/requests')).json()).data[0].id, 'esp-rejected');
+    assert.equal((await request(baseUrl, '/api/v1/devices/esp-rejected/commands/next')).status, 403);
+    assert.equal((await request(baseUrl, '/api/v1/devices/esp-rejected/admission', { method: 'POST', body: JSON.stringify({ decision: 'pending' }) })).status, 409);
+    assert.equal((await request(baseUrl, '/api/v1/devices/esp-rejected/admission', { method: 'POST', body: JSON.stringify({ decision: 'approved' }) })).status, 200);
+    const restoredLogs = (await (await request(baseUrl, '/api/v1/logs')).json()).data;
+    assert.ok(restoredLogs.some(log => log.meta?.deviceId === 'esp-rejected' && log.message.startsWith('Device pending:')));
+    await request(baseUrl, '/api/v1/devices/esp-rejected', { method: 'DELETE' });
 
     process.env.DEVICE_OFFLINE_AFTER_SECONDS = '0.01';
     await new Promise(resolve => setTimeout(resolve, 20));
