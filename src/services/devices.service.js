@@ -25,8 +25,10 @@ function normalizeDevice(device) {
     id: device.id,
     admission: device.admission || 'approved',
     name: device.name,
+    purpose: typeof device.purpose === 'string' ? device.purpose : '',
     ip: device.ip || null,
     type: device.type || 'esp',
+    boardProfile: device.boardProfile || null,
     status: device.status || 'unknown',
     firmware: device.firmware || null,
     capabilities: Array.isArray(device.capabilities) ? device.capabilities : [],
@@ -84,8 +86,10 @@ function publicDevice(device) {
     id: normalized.id,
     admission: normalized.admission,
     name: normalized.name,
+    purpose: normalized.purpose,
     ip: normalized.ip,
     type: normalized.type,
+    boardProfile: normalized.boardProfile,
     status: effectiveStatus(normalized, lastSeen),
     firmware: normalized.firmware,
     capabilities: normalized.capabilities,
@@ -105,6 +109,40 @@ exports.getAll = () => {
 };
 
 exports.getRequests = (admission = 'pending') => readData().filter(d => d.admission === admission).map(publicDevice);
+
+exports.setPurpose = (id, purpose) => {
+  exports.requireApproved(id);
+  const devices = readData();
+  const device = findDevice(devices, id);
+  if (!device) return null;
+  if ((device.purpose || '') === purpose) return publicDevice(device);
+  device.purpose = purpose;
+  device.updatedAt = new Date().toISOString();
+  writeData(devices);
+  logs.append({ type: 'device', message: `Device purpose updated: ${device.name}`, meta: { deviceId: id, purpose } });
+  return publicDevice(device);
+};
+
+exports.assignBoard = (id, boardProfile) => {
+  if (!require('./boardProfiles').isValid(boardProfile)) {
+    const error = new Error('Invalid board profile or revision');
+    error.status = error.statusCode = 400;
+    throw error;
+  }
+  exports.requireApproved(id);
+  const devices = readData();
+  const device = findDevice(devices, id);
+  if (!device) return null;
+  if ((device.boardProfile?.id || null) === (boardProfile?.id || null) &&
+      (device.boardProfile?.revision || null) === (boardProfile?.revision || null)) return publicDevice(device);
+  const previous = device.boardProfile || null;
+  device.boardProfile = boardProfile === null ? null : { id: boardProfile.id, revision: boardProfile.revision };
+  device.updatedAt = new Date().toISOString();
+  writeData(devices);
+  logs.append({ type: 'device', message: `Board profile ${boardProfile ? 'assigned' : 'removed'}: ${device.name}`,
+    meta: { deviceId: id, previous, boardProfile: device.boardProfile } });
+  return publicDevice(device);
+};
 
 exports.decideAdmission = (id, decision) => {
   const devices = readData();
