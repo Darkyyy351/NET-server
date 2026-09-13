@@ -199,7 +199,7 @@ async function main() {
 
     const heartbeat = await request(baseUrl, '/api/v1/devices/esp-test-01/heartbeat', {
       method: 'POST',
-      body: JSON.stringify({ status: 'online' })
+      body: JSON.stringify({ status: 'online', telemetry: { rssi: -63, uptimeSeconds: 0, freeHeapBytes: 30000 } })
     });
     assert.equal(heartbeat.status, 200);
     const heartbeatBody = await heartbeat.json();
@@ -211,6 +211,25 @@ async function main() {
     const devicesAfterEcoHeartbeatBody = await devicesAfterEcoHeartbeat.json();
     assert.equal(devicesAfterEcoHeartbeatBody.data[0].status, 'online');
     assert.equal(devicesAfterEcoHeartbeatBody.data[0].lastSeen, heartbeatBody.data.lastSeen);
+    assert.equal(devicesAfterEcoHeartbeatBody.data[0].telemetry.rssi, -63);
+    assert.equal(devicesAfterEcoHeartbeatBody.data[0].telemetry.uptimeSeconds, 0);
+    assert.equal(devicesAfterEcoHeartbeatBody.data[0].telemetry.freeHeapBytes, 30000);
+    assert.ok(Date.parse(devicesAfterEcoHeartbeatBody.data[0].telemetry.receivedAt));
+    assert.equal(JSON.parse(fs.readFileSync(dataPath, 'utf8'))[0].telemetry, undefined);
+    for (const sample of [[], {}, { rssi: '-63', uptimeSeconds: 1, freeHeapBytes: 20 },
+      { rssi: -128, uptimeSeconds: 1, freeHeapBytes: 20 },
+      { rssi: -63, uptimeSeconds: -1, freeHeapBytes: 20 },
+      { rssi: -63, uptimeSeconds: 1, freeHeapBytes: 1048577 }]) {
+      const invalid = await request(baseUrl, '/api/v1/devices/esp-test-01/heartbeat', {
+        method: 'POST', body: JSON.stringify({ telemetry: sample })
+      });
+      assert.equal(invalid.status, 400);
+    }
+    assert.equal((await (await request(baseUrl, '/api/v1/devices')).json()).data[0].telemetry.rssi, -63);
+    const legacyHeartbeat = await request(baseUrl, '/api/v1/devices/esp-test-01/heartbeat', {
+      method: 'POST', body: '{}'
+    });
+    assert.equal((await legacyHeartbeat.json()).data.telemetry, null);
 
     const normalMode = await request(baseUrl, '/api/v1/system/mode', {
       method: 'POST',

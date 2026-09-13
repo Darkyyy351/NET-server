@@ -7,6 +7,8 @@ const systemConfig = require('./systemConfig.service');
 const filePath = path.join(__dirname, '../../data/devices.json');
 const DEFAULT_OFFLINE_AFTER_SECONDS = 35;
 const liveLastSeen = new Map();
+const liveTelemetry = new Map();
+const { parseTelemetry } = require('./deviceTelemetry');
 
 function readData() {
   return readJsonArray(filePath);
@@ -93,6 +95,7 @@ function publicDevice(device) {
     status: effectiveStatus(normalized, lastSeen),
     firmware: normalized.firmware,
     capabilities: normalized.capabilities,
+    telemetry: liveTelemetry.get(device.id) || null,
     lastSeen,
     createdAt: normalized.createdAt,
     updatedAt: normalized.updatedAt,
@@ -213,6 +216,7 @@ exports.register = ({ id, name, ip, type, firmware, capabilities }) => {
     existing.updatedAt = now;
     existing.commands = Array.isArray(existing.commands) ? existing.commands : [];
     liveLastSeen.set(existing.id, Date.parse(now));
+    liveTelemetry.delete(existing.id);
 
     writeData(devices);
     logs.append({
@@ -250,7 +254,7 @@ exports.register = ({ id, name, ip, type, firmware, capabilities }) => {
   return publicDevice(device);
 };
 
-exports.heartbeat = (id, { status, ip, firmware, capabilities } = {}) => {
+exports.heartbeat = (id, { status, ip, firmware, capabilities, telemetry } = {}) => {
   exports.requireApproved(id);
   const devices = readData();
   const device = findDevice(devices, id);
@@ -259,6 +263,7 @@ exports.heartbeat = (id, { status, ip, firmware, capabilities } = {}) => {
     return null;
   }
 
+  const sample = parseTelemetry(telemetry);
   const nextStatus = status || 'online';
   const nextIp = ip || device.ip || null;
   const nextFirmware = firmware || device.firmware || null;
@@ -271,6 +276,8 @@ exports.heartbeat = (id, { status, ip, firmware, capabilities } = {}) => {
   );
   const mode = systemConfig.getStatus();
   const now = new Date();
+  if (sample) liveTelemetry.set(id, { ...sample, receivedAt: now.toISOString() });
+  else liveTelemetry.delete(id);
   liveLastSeen.set(device.id, now.getTime());
   const lastPersistedAt = device.lastSeen ? Date.parse(device.lastSeen) : 0;
   const persistenceDue = (
@@ -309,6 +316,7 @@ exports.remove = (id) => {
 
   writeData(filtered);
   liveLastSeen.delete(id);
+  liveTelemetry.delete(id);
   logs.append({
     type: 'device',
     level: 'warn',
