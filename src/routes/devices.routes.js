@@ -5,6 +5,8 @@ const auth = require("../middleware/auth.middleware");
 
 const {
     getDevices,
+    assignBoard,
+    setPurpose,
     createDevice,
     registerDevice,
     heartbeatDevice,
@@ -45,6 +47,8 @@ router.get("/", getDevices);
 router.post("/", createDevice);
 router.post("/register", registerDevice);
 router.post("/:id/heartbeat", heartbeatDevice);
+router.post("/:id/board-profile", assignBoard);
+router.post("/:id/purpose", setPurpose);
 router.get("/:id/commands", getDeviceCommands);
 router.post("/:id/commands", queueDeviceCommand);
 router.get("/:id/commands/next", claimNextDeviceCommand);

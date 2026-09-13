@@ -1,6 +1,17 @@
 const deviceService = require("../services/devices.service");
 const allowedDeviceTypes = new Set(["esp", "wled", "sensor", "relay"]);
 
+exports.setPurpose = (req, res) => {
+    const body = req.body;
+    if (!body || Array.isArray(body) || Object.keys(body).length !== 1 ||
+        typeof body.purpose !== 'string' || body.purpose.length > 80 || /[\x00-\x1f\x7f]/.test(body.purpose)) {
+        return res.status(400).json({ success: false, error: 'Purpose must be a single line of up to 80 characters' });
+    }
+    const device = deviceService.setPurpose(req.params.id, body.purpose.trim());
+    if (!device) return res.status(404).json({ success: false, error: 'Device not found' });
+    res.json({ success: true, data: device });
+};
+
 function isValidIpv4(value) {
     const parts = String(value).split(".");
 
@@ -21,6 +32,17 @@ exports.getDevices = (req, res) => {
         success: true,
         data: devices
     });
+};
+
+exports.assignBoard = (req, res) => {
+    const body = req.body;
+    if (!body || Array.isArray(body) || Object.keys(body).length !== 1 ||
+        !require('../services/boardProfiles').isValid(body.boardProfile)) {
+        return res.status(400).json({ success: false, error: 'Invalid board profile or revision' });
+    }
+    const device = deviceService.assignBoard(req.params.id, body.boardProfile);
+    if (!device) return res.status(404).json({ success: false, error: 'Device not found' });
+    res.json({ success: true, data: device });
 };
 
 exports.createDevice = (req, res) => {

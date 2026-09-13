@@ -122,7 +122,46 @@ async function main() {
     const duplicate = await request(baseUrl, '/api/v1/devices/register', { method: 'POST', body: JSON.stringify({ id: 'esp-test-01', admission: 'approved' }) });
     assert.equal((await duplicate.json()).data.admission, 'pending');
     assert.equal((await (await request(baseUrl, '/api/v1/devices/requests')).json()).data.length, 1);
+    const profile = { id: 'nodemcu-amica-esp12e-cp2102', revision: 1 };
+    const boardRoute = '/api/v1/devices/esp-test-01/board-profile';
+    const boardRequest = boardProfile => ({ method: 'POST', body: JSON.stringify({ boardProfile }) });
+    assert.equal((await request(baseUrl, boardRoute, boardRequest(profile))).status, 403);
     assert.equal((await request(baseUrl, '/api/v1/devices/esp-test-01/admission', { method: 'POST', body: JSON.stringify({ decision: 'approved' }) })).status, 200);
+    assert.equal((await (await request(baseUrl, '/api/v1/devices')).json()).data[0].boardProfile, null);
+    assert.equal((await request(baseUrl, boardRoute, { ...boardRequest(profile), headers: { Authorization: 'Bearer wrong' } })).status, 403);
+    for (const invalid of [undefined, '', [], {}, { id: profile.id, revision: 2 }, { id: 'unknown', revision: 1 }, { ...profile, extra: true }]) {
+      assert.equal((await request(baseUrl, boardRoute, boardRequest(invalid))).status, 400);
+    }
+    assert.equal((await request(baseUrl, '/api/v1/devices/missing/board-profile', boardRequest(profile))).status, 404);
+    const assignedBoard = await request(baseUrl, boardRoute, boardRequest(profile));
+    assert.equal(assignedBoard.status, 200);
+    assert.deepEqual((await assignedBoard.json()).data.boardProfile, profile);
+    await request(baseUrl, '/api/v1/devices/register', { method: 'POST', body: JSON.stringify({ id: 'esp-test-01', boardProfile: null }) });
+    await request(baseUrl, '/api/v1/devices/esp-test-01/heartbeat', { method: 'POST', body: JSON.stringify({ boardProfile: null }) });
+    assert.deepEqual((await (await request(baseUrl, '/api/v1/devices')).json()).data[0].boardProfile, profile);
+    const restarted = require('child_process').spawnSync(process.execPath, ['-e', "process.stdout.write(JSON.stringify(require('./src/services/devices.service').getAll()[0].boardProfile))"], { cwd: path.join(__dirname, '..'), encoding: 'utf8' });
+    assert.equal(restarted.status, 0, restarted.stderr);
+    assert.deepEqual(JSON.parse(restarted.stdout), profile);
+    const beforeClear = JSON.parse(fs.readFileSync(dataPath, 'utf8'))[0];
+    const purposeRoute = '/api/v1/devices/esp-test-01/purpose';
+    for (const purpose of [null, 12, 'x'.repeat(81), 'two\nlines']) {
+      assert.equal((await request(baseUrl, purposeRoute, { method: 'POST', body: JSON.stringify({ purpose }) })).status, 400);
+    }
+    const purposeResult = await request(baseUrl, purposeRoute, { method: 'POST', body: JSON.stringify({ purpose: '  Osvětlení stolu  ' }) });
+    assert.equal(purposeResult.status, 200);
+    assert.equal((await purposeResult.json()).data.purpose, 'Osvětlení stolu');
+    await request(baseUrl, '/api/v1/devices/register', { method: 'POST', body: JSON.stringify({ id: 'esp-test-01', purpose: 'overwrite' }) });
+    await request(baseUrl, '/api/v1/devices/esp-test-01/heartbeat', { method: 'POST', body: JSON.stringify({ purpose: 'overwrite' }) });
+    assert.equal((await (await request(baseUrl, '/api/v1/devices')).json()).data[0].purpose, 'Osvětlení stolu');
+    assert.equal(JSON.parse(fs.readFileSync(dataPath, 'utf8'))[0].purpose, 'Osvětlení stolu');
+    const clearedPurpose = await request(baseUrl, purposeRoute, { method: 'POST', body: JSON.stringify({ purpose: '' }) });
+    assert.equal((await clearedPurpose.json()).data.purpose, '');
+    assert.equal((await request(baseUrl, boardRoute, boardRequest(null))).status, 200);
+    const afterClear = JSON.parse(fs.readFileSync(dataPath, 'utf8'))[0];
+    assert.equal(afterClear.boardProfile, null);
+    assert.equal(afterClear.name, beforeClear.name);
+    assert.deepEqual(afterClear.commands, beforeClear.commands);
+    assert.ok(JSON.parse(fs.readFileSync(logsPath, 'utf8')).some(log => log.meta?.boardProfile?.id === profile.id));
 
     await request(baseUrl, '/api/v1/devices/register', { method: 'POST', body: JSON.stringify({ id: 'esp-rejected' }) });
     await request(baseUrl, '/api/v1/devices/esp-rejected/admission', { method: 'POST', body: JSON.stringify({ decision: 'rejected' }) });
