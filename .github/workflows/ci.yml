@@ -32,6 +32,15 @@ jobs:
       - name: Run smoke tests
         run: npm test
 
+      - name: Test host control API
+        run: node test/host-control.test.js
+
+      - name: Test availability transitions
+        run: node test/availability.test.js
+
+      - name: Test notification history API
+        run: node test/notifications.test.js
+
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 

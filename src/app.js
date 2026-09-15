@@ -33,6 +33,9 @@ app.get("/api/v1/health", (req, res) => {
 app.use('/api/v1/devices', devicesRoutes);
 app.use('/api/v1/logs', logsRoutes);
 app.use('/api/v1/system', systemRoutes);
+app.get('/api/v1/notifications', require('./middleware/auth.middleware'), (req, res) => {
+    res.json({ success: true, data: require('./services/availability.service').getRecent() });
+});
 
 app.use((req, res) => {
     res.status(404).json({

@@ -11,6 +11,9 @@ const {
 const router = express.Router();
 
 router.use(auth);
+const hostControl = require('../controllers/hostControl.controller');
+router.get('/host-control', hostControl.status);
+router.post('/host-control/:action', hostControl.action);
 router.get('/status', getStatus);
 router.post('/mode', setOperatingMode);
 router.get('/fan-control', getFanControl);
