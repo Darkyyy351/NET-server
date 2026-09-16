@@ -35,6 +35,6 @@ exports.status = async () => {
   try { return await request({ action: 'status' }); }
   catch (error) {
     return { available: false, powerAvailable: false, updateState: 'unavailable',
-      checkedAt: null, release: null, checking: false, operation: { state: 'idle' }, error: error.message };
+      checkedAt: null, release: null, checking: false, operation: { state: 'idle' }, history: [], error: error.message };
   }
 };
