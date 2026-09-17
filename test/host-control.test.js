@@ -19,8 +19,12 @@ const app = require('../src/app');
     assert.equal((await post('check', {}, 'bad-token')).status, 403);
     assert.equal(requests.length, 0);
     assert.equal((await post('install', { credential: 'x'.repeat(64), confirmation: 'UPDATE NET', version: '0.2.1', backend: 'main', frontend: 'main' })).status, 400);
-    assert.equal((await post('reboot', { credential: 'x'.repeat(64), confirmation: 'RESTART CM5', command: 'injected' })).status, 202);
-    assert.deepEqual(Object.keys(requests[0]).sort(), ['action', 'confirmation', 'credential']);
+    assert.equal((await post('reboot', { credential: 'x'.repeat(64), confirmation: 'RESTART CM5', delayMinutes: 5, command: 'injected' })).status, 202);
+    assert.deepEqual(Object.keys(requests[0]).sort(), ['action', 'confirmation', 'credential', 'delayMinutes']);
+    assert.equal(requests[0].delayMinutes, 5);
+    for (const delayMinutes of [-1, 2, 15, '5', true]) {
+      assert.equal((await post('poweroff', { credential: 'x'.repeat(64), confirmation: 'VYPNOUT CM5', delayMinutes })).status, 400);
+    }
     assert.equal((await post('check', { command: 'injected', credential: 'ignored' })).status, 202);
     assert.deepEqual(requests[1], { action: 'check' });
     host.request = async () => { throw new Error('Unavailable'); };

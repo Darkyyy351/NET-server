@@ -1,5 +1,6 @@
 const host = require('../services/hostControl.service');
 const logs = require('../services/logs.service');
+const POWER_DELAYS = new Set([0, 1, 5, 10]);
 
 exports.status = async (req, res) => res.json({ success: true, data: await host.status() });
 exports.action = async (req, res) => {
@@ -19,13 +20,18 @@ exports.action = async (req, res) => {
       !/^[0-9a-f]{40}$/.test(body.backend || '') || !/^[0-9a-f]{40}$/.test(body.frontend || ''))) {
     return res.status(400).json({ success: false, error: 'Exact release commits required' });
   }
+  const delayMinutes = body.delayMinutes === undefined ? 1 : body.delayMinutes;
+  if (['reboot', 'poweroff'].includes(action) && (!Number.isInteger(delayMinutes) || !POWER_DELAYS.has(delayMinutes))) {
+    return res.status(400).json({ success: false, error: 'Unsupported power action delay' });
+  }
   try {
     const payload = { action };
     if (action !== 'check') payload.credential = body.credential;
     if (confirmation) payload.confirmation = confirmation;
     if (action === 'install') Object.assign(payload, { version: body.version, backend: body.backend, frontend: body.frontend });
+    if (action === 'reboot' || action === 'poweroff') payload.delayMinutes = delayMinutes;
     const data = await host.request(payload);
-    if (action !== 'check') logs.append({ type: 'sys', message: `Host action accepted: ${action}`, meta: { action } });
+    if (action !== 'check') logs.append({ type: 'sys', message: `Host action accepted: ${action}`, meta: { action, ...(payload.delayMinutes === undefined ? {} : { delayMinutes: payload.delayMinutes }) } });
     res.status(202).json({ success: true, data });
   } catch (error) {
     res.status(503).json({ success: false, error: error.message });
