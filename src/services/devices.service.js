@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { readJsonArray, writeJsonArray } = require('./jsonStore');
 const logs = require('./logs.service');
 const systemConfig = require('./systemConfig.service');
+const telemetryHistory = require('./telemetryHistory.service');
 
 const filePath = path.join(__dirname, '../../data/devices.json');
 const DEFAULT_OFFLINE_AFTER_SECONDS = 35;
@@ -276,7 +277,10 @@ exports.heartbeat = (id, { status, ip, firmware, capabilities, telemetry } = {})
   );
   const mode = systemConfig.getStatus();
   const now = new Date();
-  if (sample) liveTelemetry.set(id, { ...sample, receivedAt: now.toISOString() });
+  if (sample) {
+    liveTelemetry.set(id, { ...sample, receivedAt: now.toISOString() });
+    telemetryHistory.record(id, sample, now);
+  }
   else liveTelemetry.delete(id);
   liveLastSeen.set(device.id, now.getTime());
   const lastPersistedAt = device.lastSeen ? Date.parse(device.lastSeen) : 0;
@@ -317,6 +321,7 @@ exports.remove = (id) => {
   writeData(filtered);
   liveLastSeen.delete(id);
   liveTelemetry.delete(id);
+  telemetryHistory.remove(id);
   logs.append({
     type: 'device',
     level: 'warn',

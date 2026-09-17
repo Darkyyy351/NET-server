@@ -5,6 +5,7 @@ const auth = require("../middleware/auth.middleware");
 
 const {
     getDevices,
+    getTelemetryHistory,
     assignBoard,
     setPurpose,
     createDevice,
@@ -44,6 +45,7 @@ router.get('/:id/verify/:commandId', (req, res) => {
 });
 
 router.get("/", getDevices);
+router.get("/telemetry/history", getTelemetryHistory);
 router.post("/", createDevice);
 router.post("/register", registerDevice);
 router.post("/:id/heartbeat", heartbeatDevice);

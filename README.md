@@ -20,6 +20,7 @@ Stable core backend for NET 0.1.
 - Device CRUD
 - ESP self-registration
 - ESP heartbeat updates with automatic offline detection
+- Persistent 24-hour device telemetry and availability history
 - Command queue for ESP polling
 - System status endpoint for dashboard service-health cards
 - Persistent event logs for dashboard audit/monitoring views
@@ -41,6 +42,7 @@ Routes:
 - `POST /api/v1/devices`
 - `POST /api/v1/devices/register`
 - `POST /api/v1/devices/:id/heartbeat`
+- `GET /api/v1/devices/telemetry/history?hours=1|6|24`
 - `DELETE /api/v1/devices/:id`
 - `GET /api/v1/devices/:id/commands`
 - `POST /api/v1/devices/:id/commands`
@@ -74,6 +76,9 @@ CORS_ORIGIN=http://localhost:5173
 NET_RUNTIME=docker
 LOG_RETENTION_LIMIT=500
 DEVICE_OFFLINE_AFTER_SECONDS=35
+TELEMETRY_HISTORY_SAMPLE_SECONDS=60
+TELEMETRY_HISTORY_RETENTION_HOURS=24
+TELEMETRY_HISTORY_FLUSH_SECONDS=300
 ```
 
 Start the service:

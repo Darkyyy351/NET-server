@@ -34,6 +34,16 @@ exports.getDevices = (req, res) => {
     });
 };
 
+exports.getTelemetryHistory = (req, res) => {
+    const hours = req.query.hours === undefined ? 6 : Number(req.query.hours);
+    if (![1, 6, 24].includes(hours)) {
+        return res.status(400).json({ success: false, error: 'History range must be 1, 6 or 24 hours' });
+    }
+    const deviceIds = deviceService.getAll().map(device => device.id);
+    const data = require('../services/telemetryHistory.service').getMany(deviceIds, hours);
+    res.json({ success: true, data });
+};
+
 exports.assignBoard = (req, res) => {
     const body = req.body;
     if (!body || Array.isArray(body) || Object.keys(body).length !== 1 ||

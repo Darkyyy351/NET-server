@@ -1,6 +1,8 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const telemetryHistoryPath = path.join(__dirname, 'tmp-telemetry-history.json');
+process.env.TELEMETRY_HISTORY_FILE = telemetryHistoryPath;
 const app = require('../src/app');
 
 const dataPath = path.join(__dirname, '../data/devices.json');
@@ -216,6 +218,26 @@ async function main() {
     assert.equal(devicesAfterEcoHeartbeatBody.data[0].telemetry.freeHeapBytes, 30000);
     assert.ok(Date.parse(devicesAfterEcoHeartbeatBody.data[0].telemetry.receivedAt));
     assert.equal(JSON.parse(fs.readFileSync(dataPath, 'utf8'))[0].telemetry, undefined);
+    const history = await request(baseUrl, '/api/v1/devices/telemetry/history?hours=6');
+    assert.equal(history.status, 200);
+    const historyBody = await history.json();
+    assert.equal(historyBody.data.sampleIntervalSeconds, 60);
+    assert.equal(historyBody.data.retentionHours, 24);
+    assert.equal(historyBody.data.series[0].deviceId, 'esp-test-01');
+    assert.equal(historyBody.data.series[0].samples.length, 1);
+    assert.equal(historyBody.data.series[0].samples[0].rssi, -63);
+    const telemetryHistory = require('../src/services/telemetryHistory.service');
+    telemetryHistory.recordAvailability('esp-test-01', 'offline', new Date(Date.now() - 2000));
+    telemetryHistory.recordAvailability('esp-test-01', 'online', new Date(Date.now() - 1000));
+    const availabilityHistory = await request(baseUrl, '/api/v1/devices/telemetry/history?hours=1');
+    assert.deepEqual((await availabilityHistory.json()).data.series[0].events.map(event => event.state), ['offline', 'online']);
+    await request(baseUrl, '/api/v1/devices/esp-test-01/heartbeat', {
+      method: 'POST',
+      body: JSON.stringify({ status: 'online', telemetry: { rssi: -63, uptimeSeconds: 1, freeHeapBytes: 30000 } })
+    });
+    const throttledHistory = await request(baseUrl, '/api/v1/devices/telemetry/history?hours=6');
+    assert.equal((await throttledHistory.json()).data.series[0].samples.length, 1);
+    assert.equal((await request(baseUrl, '/api/v1/devices/telemetry/history?hours=2')).status, 400);
     for (const sample of [[], {}, { rssi: '-63', uptimeSeconds: 1, freeHeapBytes: 20 },
       { rssi: -128, uptimeSeconds: 1, freeHeapBytes: 20 },
       { rssi: -63, uptimeSeconds: -1, freeHeapBytes: 20 },
@@ -280,6 +302,8 @@ async function main() {
       method: 'DELETE'
     });
     assert.equal(removed.status, 200);
+    const historyAfterRemoval = await request(baseUrl, '/api/v1/devices/telemetry/history?hours=24');
+    assert.deepEqual((await historyAfterRemoval.json()).data.series, []);
 
     const logs = await request(baseUrl, '/api/v1/logs');
     assert.equal(logs.status, 200);
@@ -293,7 +317,9 @@ async function main() {
     )));
   } finally {
     server.close();
+    require('../src/services/telemetryHistory.service').close();
     fs.rmSync(hwmonRoot, { recursive: true, force: true });
+    fs.rmSync(telemetryHistoryPath, { force: true });
     fs.writeFileSync(dataPath, originalData);
     fs.writeFileSync(logsPath, originalLogs);
     if (originalDeployment === null) {

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const devices = require('./devices.service');
 const logs = require('./logs.service');
 const { readJsonArray, writeJsonArray } = require('./jsonStore');
+const telemetryHistory = require('./telemetryHistory.service');
 const file = path.join(__dirname, '../../data/notifications.json');
 
 function append(device, state) {
@@ -11,6 +12,7 @@ function append(device, state) {
     message: state === 'offline' ? `Zařízení ${device.name} je offline.` : `Zařízení ${device.name} je znovu online.` };
   const events = readJsonArray(file);
   writeJsonArray(file, [...events, event].slice(-100));
+  telemetryHistory.recordAvailability(device.id, state, event.time);
   try {
     logs.append({ type: 'availability', level: state === 'offline' ? 'warn' : 'info',
       message: event.message, meta: { deviceId: device.id, state, notificationId: event.id } });
